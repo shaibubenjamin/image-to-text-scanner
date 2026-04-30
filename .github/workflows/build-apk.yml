@@ -19,7 +19,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install Android SDK components
+      - name: Setup Gradle 8.4
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Accept Android SDK licences & install components
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
@@ -27,23 +32,24 @@ jobs:
             "platforms;android-34" \
             "build-tools;34.0.0"
 
+      - name: Create local.properties (SDK path for Gradle)
+        run: echo "sdk.dir=$ANDROID_HOME" > android-app/local.properties
+
       - name: Inject server URL
         run: |
           BASE_URL="${{ secrets.BASE_URL }}"
           if [ -z "$BASE_URL" ]; then
             BASE_URL="https://qex-questionnaire-intelligence.onrender.com"
           fi
-          sed -i "s|https://qex-questionnaire-intelligence.onrender.com|$BASE_URL|g" android-app/app/build.gradle
-          echo "Building with BASE_URL: $BASE_URL"
+          sed -i "s|https://qex-questionnaire-intelligence.onrender.com|$BASE_URL|g" \
+            android-app/app/build.gradle
+          echo "BASE_URL set to: $BASE_URL"
 
-      - name: Build Debug APK with Gradle
+      - name: Build Debug APK
         working-directory: android-app
-        run: |
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace --info
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: QEX-Scanner-APK
