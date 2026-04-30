@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:   # allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,35 +19,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Grant execute permission to gradlew
-        run: chmod +x android-app/gradlew
-        continue-on-error: true
-
-      - name: Create gradlew if missing
-        working-directory: android-app
+      - name: Install Android SDK components
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.4
-          fi
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Inject server URL
-        working-directory: android-app
         run: |
           BASE_URL="${{ secrets.BASE_URL }}"
           if [ -z "$BASE_URL" ]; then
             BASE_URL="https://qex-questionnaire-intelligence.onrender.com"
           fi
-          sed -i "s|https://qex-questionnaire-intelligence.onrender.com|$BASE_URL|g" app/build.gradle
-          echo "Using BASE_URL: $BASE_URL"
+          sed -i "s|https://qex-questionnaire-intelligence.onrender.com|$BASE_URL|g" android-app/app/build.gradle
+          echo "Building with BASE_URL: $BASE_URL"
 
-      - name: Build Debug APK
+      - name: Build Debug APK with Gradle
         working-directory: android-app
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: QEX-Scanner-APK
