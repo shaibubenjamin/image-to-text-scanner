@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F8FAFC"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan Pages"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#1E293B"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:id="@+id/tvPageCount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="No pages scanned yet"
+        android:textSize="14sp"
+        android:textColor="#64748B"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Horizontal scrolling thumbnails -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvPages"
+        android:layout_width="match_parent"
+        android:layout_height="160dp"
+        android:layout_marginBottom="16dp"
+        android:background="#E2E8F0"
+        android:padding="8dp" />
+
+    <Button
+        android:id="@+id/btnScanPage"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="📷  Scan Next Page"
+        android:textSize="16sp"
+        android:backgroundTint="#2563EB"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/btnExtract"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="✓  Done — Start Extraction"
+        android:textSize="16sp"
+        android:backgroundTint="#16A34A" />
+
+</LinearLayout>

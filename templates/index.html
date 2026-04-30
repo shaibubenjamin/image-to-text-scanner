@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Upload — QEX{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+
+    <h2 class="mb-1 fw-bold">Upload Questionnaire</h2>
+    <p class="text-muted mb-4">
+      Select a PDF or image file. Extraction starts automatically after upload.
+    </p>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+
+        <form method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data">
+
+          <div class="mb-3">
+            <label for="fileInput" class="form-label fw-semibold">Select file</label>
+            <input
+              type="file"
+              name="file"
+              id="fileInput"
+              class="form-control form-control-lg"
+              accept=".pdf,.png,.jpg,.jpeg"
+              required
+            />
+            <div class="form-text">Supported: PDF, PNG, JPG, JPEG — max 100 MB</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg w-100">
+            <i class="bi bi-cloud-upload me-2"></i>Upload &amp; Start Extraction
+          </button>
+
+        </form>
+
+      </div>
+    </div>
+
+    {% if schema %}
+    <div class="card shadow-sm mt-3">
+      <div class="card-body py-3">
+        <p class="mb-1 fw-semibold small">Active schema — {{ schema.field_count }} fields</p>
+        <div class="d-flex flex-wrap gap-1">
+          {% for key in schema.field_keys_sorted()[:15] %}
+            <span class="badge bg-secondary">{{ key }}</span>
+          {% endfor %}
+          {% if schema.field_count > 15 %}
+            <span class="badge bg-light text-dark">+{{ schema.field_count - 15 }} more</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="text-center mt-3">
+      <a href="{{ url_for('results') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-table me-1"></i>View Results
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

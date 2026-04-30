@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}Review — {{ q.original_filename }} — QEX{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('results') }}">Results</a></li>
+    <li class="breadcrumb-item active">Review — {{ q.original_filename }}</li>
+  </ol>
+</nav>
+
+<!-- Step indicator -->
+<div class="d-flex align-items-center gap-2 mb-4 small fw-semibold text-muted">
+  <span class="step-dot done">1</span> Upload
+  <span class="step-line done"></span>
+  <span class="step-dot done">2</span> Run Extraction
+  <span class="step-line done"></span>
+  <span class="step-dot active">3</span> Review
+  <span class="step-line"></span>
+  <span class="step-dot">4</span> Accept &amp; Save
+</div>
+
+<!-- Header -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h3 class="mb-1">
+          <i class="bi bi-pencil-square text-warning me-2"></i>
+          Review Extracted Answers
+        </h3>
+        <p class="text-muted mb-0">
+          <strong>{{ q.original_filename }}</strong> &bull;
+          {{ q.page_count }} page(s) &bull;
+          OCR: <strong>{{ q.ocr_method or 'N/A' }}</strong> &bull;
+          {{ responses|length }} question(s) detected
+        </p>
+      </div>
+      <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <a href="{{ url_for('questionnaire_raw', qid=q.id) }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-code-square me-1"></i>View Raw OCR
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Accuracy summary -->
+{% if q.overall_accuracy is not none %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-{{ q.accuracy_color() }}">{{ q.accuracy_pct() }}%</div>
+        <div class="text-muted small">Overall Accuracy</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-primary">
+          {{ (q.typed_accuracy * 100) | round(1) if q.typed_accuracy is not none else '—' }}{% if q.typed_accuracy is not none %}%{% endif %}
+        </div>
+        <div class="text-muted small">Typed</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-info">
+          {{ (q.handwritten_accuracy * 100) | round(1) if q.handwritten_accuracy is not none else '—' }}{% if q.handwritten_accuracy is not none %}%{% endif %}
+        </div>
+        <div class="text-muted small">Handwritten</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-secondary">
+          {{ (q.checkbox_accuracy * 100) | round(1) if q.checkbox_accuracy is not none else '—' }}{% if q.checkbox_accuracy is not none %}%{% endif %}
+        </div>
+        <div class="text-muted small">Checkbox</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Review form -->
+<form method="POST" action="{{ url_for('questionnaire_accept', qid=q.id) }}" id="reviewForm">
+
+  <div class="card shadow-sm mb-4">
+    <div class="card-header qex-card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-list-check me-2"></i>Extracted Q&amp;A — Edit if needed, then Accept</span>
+      <span class="text-muted small">{{ responses|length }} question(s)</span>
+    </div>
+    <div class="card-body p-0">
+
+      {% if responses %}
+      <div class="table-responsive">
+        <table class="table table-hover table-bordered mb-0 review-table">
+          <thead class="table-light">
+            <tr>
+              <th style="width:70px">Field</th>
+              <th style="width:30%">Question detected</th>
+              <th>Extracted answer <span class="text-muted fw-normal">(editable)</span></th>
+              <th style="width:130px">Type</th>
+              <th style="width:115px">Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for resp in responses %}
+            <tr class="{% if resp.confidence and resp.confidence < 0.75 %}table-warning{% endif %}">
+
+              <!-- Field label -->
+              <td class="fw-bold text-primary align-middle text-center">{{ resp.field_name }}</td>
+
+              <!-- Question text (matched against schema or as detected) -->
+              <td class="text-muted small align-middle">
+                {% set schema_q = schema_fields.get(resp.field_name, {}) %}
+                {% if schema_q.question_text %}
+                  <span title="From schema">{{ schema_q.question_text }}</span>
+                {% else %}
+                  {{ resp.question_text or '—' }}
+                {% endif %}
+              </td>
+
+              <!-- Editable answer -->
+              <td class="align-middle">
+                <div class="d-flex align-items-start gap-2">
+                  <textarea name="answer_{{ resp.id }}"
+                            class="form-control form-control-sm review-answer"
+                            rows="2"
+                            placeholder="(leave blank if no answer)">{{ resp.normalized_answer or '' }}</textarea>
+                  <button type="button" class="btn btn-link btn-sm p-0 pt-1 toggle-raw-btn flex-shrink-0"
+                          title="Show raw OCR"
+                          data-raw="{{ resp.raw_answer | e }}">
+                    <i class="bi bi-code text-muted"></i>
+                  </button>
+                </div>
+                <!-- Low-confidence warning -->
+                {% if resp.confidence and resp.confidence < 0.75 %}
+                <div class="text-warning small mt-1">
+                  <i class="bi bi-exclamation-triangle-fill me-1"></i>Low confidence — please verify
+                </div>
+                {% endif %}
+              </td>
+
+              <!-- Type badge -->
+              <td class="align-middle text-center">
+                <span class="badge bg-{{ resp.answer_type_badge() }}">{{ resp.answer_type }}</span>
+              </td>
+
+              <!-- Confidence bar -->
+              <td class="align-middle">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height:6px;">
+                    <div class="progress-bar bg-{{ resp.confidence_color() }}"
+                         style="width:{{ resp.confidence_pct() or 0 }}%"></div>
+                  </div>
+                  <span class="text-muted small text-nowrap">{{ resp.confidence_pct() or '—' }}%</span>
+                </div>
+              </td>
+
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% else %}
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-search display-4 d-block mb-3"></i>
+        <p>No questions were detected in this document.</p>
+        <p class="small">The OCR may have struggled with the scan quality. Check the raw OCR output for details.</p>
+      </div>
+      {% endif %}
+
+    </div><!-- /card-body -->
+  </div><!-- /card -->
+
+  <!-- Action bar -->
+  <div class="card shadow-sm">
+    <div class="card-body d-flex flex-wrap gap-3 align-items-center justify-content-between">
+      <div>
+        <p class="mb-0 text-muted small">
+          <i class="bi bi-info-circle me-1"></i>
+          Yellow rows have low OCR confidence — double-check those answers before accepting.
+        </p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('results') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Back
+        </a>
+        <button type="submit" class="btn btn-success btn-lg" id="acceptBtn">
+          <i class="bi bi-check-circle-fill me-2"></i>Accept &amp; Save to Database
+        </button>
+      </div>
+    </div>
+  </div>
+
+</form>
+
+<!-- Raw OCR modal -->
+<div class="modal fade" id="rawModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Raw OCR for this answer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <pre id="rawModalText" class="raw-ocr-pre p-3 mb-0" style="max-height:50vh;border-radius:0 0 .375rem .375rem;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rawModal = new bootstrap.Modal(document.getElementById('rawModal'));
+const rawText  = document.getElementById('rawModalText');
+
+document.querySelectorAll('.toggle-raw-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    rawText.textContent = btn.dataset.raw || '(no raw OCR text)';
+    rawModal.show();
+  });
+});
+
+document.getElementById('acceptBtn').addEventListener('click', function() {
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
+});
+</script>
+{% endblock %}

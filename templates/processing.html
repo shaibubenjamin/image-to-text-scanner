@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Processing — QEX{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+
+    <h2 class="fw-bold mb-1">Processing</h2>
+    <p class="text-muted mb-4"><strong>{{ q.original_filename }}</strong></p>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+
+        <!-- Step 1: Uploaded ✓ (always done) -->
+        <div class="d-flex align-items-center gap-3 mb-4">
+          <span class="step-icon done"><i class="bi bi-check-lg"></i></span>
+          <div>
+            <div class="fw-semibold">Uploaded</div>
+            <div class="text-muted small">File saved successfully</div>
+          </div>
+        </div>
+
+        <!-- Step 2: Extracting (live) -->
+        <div class="d-flex align-items-start gap-3 mb-4">
+          <span class="step-icon running flex-shrink-0" id="extractIcon">
+            <span class="spinner-border spinner-border-sm"></span>
+          </span>
+          <div class="flex-grow-1">
+            <div class="fw-semibold" id="extractTitle">Extracting text…</div>
+
+            <!-- Page counter -->
+            <div class="text-muted small mb-2" id="extractDetail">Starting OCR…</div>
+
+            <!-- Progress bar -->
+            <div class="progress" style="height: 10px;" id="progressWrap">
+              <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                   id="progressBar" style="width: 5%"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-1">
+              <span class="text-muted" style="font-size:.75rem;" id="progressLabel">Waiting…</span>
+              <span class="fw-semibold text-primary" style="font-size:.8rem;" id="progressPct">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Review (inactive until done) -->
+        <div class="d-flex align-items-center gap-3 mb-4 opacity-40" id="stepReady">
+          <span class="step-icon pending" id="readyIcon">
+            <i class="bi bi-pencil-square"></i>
+          </span>
+          <div>
+            <div class="fw-semibold">Review answers</div>
+            <div class="text-muted small">Check and edit before saving</div>
+          </div>
+        </div>
+
+        <!-- Done: action button (hidden until complete) -->
+        <div id="actionArea" class="d-none">
+          <a id="reviewBtn" href="#" class="btn btn-warning btn-lg w-100">
+            <i class="bi bi-pencil-square me-2"></i>Review &amp; Accept Answers
+          </a>
+        </div>
+
+        <!-- Error (hidden unless failed) -->
+        <div id="errorArea" class="d-none">
+          <div class="alert alert-danger small mb-3" id="errorMsg"></div>
+          <form method="POST" action="/run/{{ q.id }}">
+            <button class="btn btn-outline-danger w-100">
+              <i class="bi bi-arrow-repeat me-1"></i>Retry Extraction
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="text-center mt-3">
+      <a href="/results" class="text-muted small">← Back to all results</a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const reviewUrl   = '/results/{{ q.id }}/review';
+const extractIcon = document.getElementById('extractIcon');
+const extractTitle  = document.getElementById('extractTitle');
+const extractDetail = document.getElementById('extractDetail');
+const progressBar   = document.getElementById('progressBar');
+const progressLabel = document.getElementById('progressLabel');
+const progressPct   = document.getElementById('progressPct');
+const stepReady     = document.getElementById('stepReady');
+const readyIcon     = document.getElementById('readyIcon');
+const actionArea    = document.getElementById('actionArea');
+const errorArea     = document.getElementById('errorArea');
+const reviewBtn     = document.getElementById('reviewBtn');
+
+function setProgress(pct, label) {
+  const clamped = Math.max(5, Math.min(100, pct));
+  progressBar.style.width = clamped + '%';
+  progressPct.textContent = pct + '%';
+  progressLabel.textContent = label;
+}
+
+function poll() {
+  fetch('/status/{{ q.id }}')
+    .then(r => r.json())
+    .then(data => {
+      const total   = data.page_count   || 0;
+      const current = data.current_page || 0;
+      const pct     = data.progress_pct || 0;
+
+      if (data.status === 'processing') {
+        if (total > 0) {
+          setProgress(pct, `Page ${current} of ${total}`);
+        } else {
+          // Page count not set yet — show indeterminate low %
+          setProgress(5, 'Preparing…');
+        }
+        setTimeout(poll, 1500);
+
+      } else if (data.status === 'review_pending' || data.status === 'completed') {
+        // All done
+        setProgress(100, total > 0 ? `${total} of ${total} pages` : 'Complete');
+        progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        progressBar.classList.add('bg-success');
+
+        extractIcon.innerHTML = '<i class="bi bi-check-lg"></i>';
+        extractIcon.className = 'step-icon done flex-shrink-0';
+        extractTitle.textContent = 'Extraction complete';
+
+        const acc = data.overall_accuracy
+          ? 'Accuracy: ' + (data.overall_accuracy * 100).toFixed(1) + '%'
+          : 'Questions detected';
+        extractDetail.textContent = acc;
+
+        stepReady.classList.remove('opacity-40');
+        readyIcon.className = 'step-icon done';
+
+        reviewBtn.href = reviewUrl;
+        actionArea.classList.remove('d-none');
+
+        // Auto-redirect
+        setTimeout(() => { window.location.href = reviewUrl; }, 2000);
+
+      } else if (data.status === 'failed') {
+        progressBar.classList.remove('progress-bar-animated', 'bg-primary');
+        progressBar.classList.add('bg-danger');
+        setProgress(100, 'Failed');
+
+        extractIcon.innerHTML = '<i class="bi bi-x-lg"></i>';
+        extractIcon.className = 'step-icon failed flex-shrink-0';
+        extractTitle.textContent = 'Extraction failed';
+
+        document.getElementById('errorMsg').textContent =
+          data.error_message || 'An unknown error occurred.';
+        errorArea.classList.remove('d-none');
+      } else {
+        // Still pending/queued
+        setProgress(5, 'Queued…');
+        setTimeout(poll, 2000);
+      }
+    })
+    .catch(() => setTimeout(poll, 3000));
+}
+
+setTimeout(poll, 1000);
+</script>
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{{ q.original_filename }} — QEX{% endblock %}
+
+{% block content %}
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('results') }}">Results</a></li>
+    <li class="breadcrumb-item active">{{ q.original_filename }}</li>
+  </ol>
+</nav>
+
+<!-- Header card -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h3 class="mb-1">
+          <i class="bi bi-file-earmark-text-fill text-primary me-2"></i>
+          {{ q.original_filename }}
+        </h3>
+        <div class="text-muted small">
+          Uploaded {{ q.uploaded_at.strftime('%d %B %Y at %H:%M') }} &bull;
+          {{ q.page_count }} page(s) &bull;
+          OCR: <strong>{{ q.ocr_method or 'N/A' }}</strong>
+        </div>
+      </div>
+      <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <div class="d-flex gap-2 justify-content-md-end">
+          <a href="{{ url_for('questionnaire_raw', qid=q.id) }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-code-square me-1"></i>Raw OCR
+          </a>
+          <form method="POST" action="{{ url_for('delete_questionnaire', qid=q.id) }}"
+                onsubmit="return confirm('Delete this questionnaire?')">
+            <button class="btn btn-outline-danger btn-sm" type="submit">
+              <i class="bi bi-trash me-1"></i>Delete
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Accuracy summary -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body">
+        {% if q.overall_accuracy is not none %}
+          <div class="display-5 fw-bold text-{{ q.accuracy_color() }}">{{ q.accuracy_pct() }}%</div>
+        {% else %}
+          <div class="display-5 fw-bold text-muted">—</div>
+        {% endif %}
+        <div class="text-muted small">Overall Accuracy</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body">
+        {% if q.typed_accuracy is not none %}
+          <div class="display-5 fw-bold text-primary">{{ (q.typed_accuracy * 100) | round(1) }}%</div>
+        {% else %}
+          <div class="display-5 fw-bold text-muted">—</div>
+        {% endif %}
+        <div class="text-muted small">Typed Text</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body">
+        {% if q.handwritten_accuracy is not none %}
+          <div class="display-5 fw-bold text-info">{{ (q.handwritten_accuracy * 100) | round(1) }}%</div>
+        {% else %}
+          <div class="display-5 fw-bold text-muted">—</div>
+        {% endif %}
+        <div class="text-muted small">Handwritten</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card border-0 shadow-sm text-center stat-card">
+      <div class="card-body">
+        {% if q.checkbox_accuracy is not none %}
+          <div class="display-5 fw-bold text-secondary">{{ (q.checkbox_accuracy * 100) | round(1) }}%</div>
+        {% else %}
+          <div class="display-5 fw-bold text-muted">—</div>
+        {% endif %}
+        <div class="text-muted small">Checkbox / Tick</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Q&A table -->
+<div class="card shadow-sm">
+  <div class="card-header qex-card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-ol me-2"></i>Extracted Responses ({{ responses|length }} questions)</span>
+    <span class="badge bg-secondary">{{ q.ocr_method or 'N/A' }}</span>
+  </div>
+  <div class="card-body p-0">
+    {% if responses %}
+    <div class="table-responsive">
+      <table class="table table-hover table-bordered mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:60px">Field</th>
+            <th>Question</th>
+            <th>Extracted Answer</th>
+            <th style="width:120px">Type</th>
+            <th style="width:110px">Confidence</th>
+            <th style="width:60px">Page</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for resp in responses %}
+          <tr>
+            <td class="fw-bold text-primary text-nowrap">{{ resp.field_name }}</td>
+            <td class="text-muted small">{{ resp.question_text or '—' }}</td>
+            <td>
+              <span class="answer-text">{{ resp.normalized_answer or '—' }}</span>
+              {% if resp.raw_answer and resp.raw_answer != resp.normalized_answer %}
+              <button class="btn btn-link btn-sm p-0 ms-2 toggle-raw"
+                      data-raw="{{ resp.raw_answer | e }}"
+                      title="Show raw OCR">
+                <i class="bi bi-code text-muted"></i>
+              </button>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ resp.answer_type_badge() }}">{{ resp.answer_type }}</span>
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="progress flex-grow-1" style="height:6px;">
+                  <div class="progress-bar bg-{{ resp.confidence_color() }}"
+                       style="width:{{ resp.confidence_pct() or 0 }}%"></div>
+                </div>
+                <span class="text-muted small text-nowrap">{{ resp.confidence_pct() or '—' }}%</span>
+              </div>
+            </td>
+            <td class="text-center text-muted small">{{ resp.page_number or 1 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox display-4 d-block mb-3"></i>
+      No responses extracted yet.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Raw OCR modal (populated by JS) -->
+<div class="modal fade" id="rawOcrModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Raw OCR Output</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <pre id="rawOcrText" class="raw-ocr-pre"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rawModal = new bootstrap.Modal(document.getElementById('rawOcrModal'));
+const rawText = document.getElementById('rawOcrText');
+
+document.querySelectorAll('.toggle-raw').forEach(btn => {
+  btn.addEventListener('click', () => {
+    rawText.textContent = btn.dataset.raw;
+    rawModal.show();
+  });
+});
+</script>
+{% endblock %}

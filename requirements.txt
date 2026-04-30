@@ -1,0 +1,11 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Cors==4.0.0
+Werkzeug==3.0.3
+requests==2.31.0
+opencv-python-headless==4.9.0.80
+pytesseract==0.3.10
+Pillow==10.3.0
+PyMuPDF==1.24.3
+numpy==1.26.4
+gunicorn==21.2.0

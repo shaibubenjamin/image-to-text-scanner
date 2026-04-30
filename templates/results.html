@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Results — QEX{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-1"><i class="bi bi-table me-2 text-primary"></i>Questionnaire Results</h2>
+    <p class="text-muted mb-0">{{ questionnaires|length }} questionnaire(s) &mdash; only <strong>Accepted</strong> records appear in exports.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('export_csv') }}" class="btn btn-outline-success btn-sm">
+      <i class="bi bi-filetype-csv me-1"></i>CSV
+    </a>
+    <a href="{{ url_for('export_json') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-filetype-json me-1"></i>JSON
+    </a>
+    <a href="{{ url_for('index') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-upload me-1"></i>Upload
+    </a>
+  </div>
+</div>
+
+<!-- Summary stats -->
+{% set completed_count   = questionnaires | selectattr('status', 'equalto', 'completed')       | list | length %}
+{% set review_count      = questionnaires | selectattr('status', 'equalto', 'review_pending')  | list | length %}
+{% set processing_count  = questionnaires | selectattr('status', 'in', ['pending','processing'])| list | length %}
+{% set failed_count      = questionnaires | selectattr('status', 'equalto', 'failed')          | list | length %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-sm-3">
+    <div class="card text-center border-0 shadow-sm stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-success">{{ completed_count }}</div>
+        <div class="text-muted small">Accepted</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-3">
+    <div class="card text-center border-0 shadow-sm stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-warning">{{ review_count }}</div>
+        <div class="text-muted small">Awaiting Review</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-3">
+    <div class="card text-center border-0 shadow-sm stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-secondary">{{ processing_count }}</div>
+        <div class="text-muted small">Processing</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-sm-3">
+    <div class="card text-center border-0 shadow-sm stat-card">
+      <div class="card-body py-3">
+        <div class="display-6 fw-bold text-primary">{{ columns|length }}</div>
+        <div class="text-muted small">Schema fields</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not questionnaires %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-inbox display-3 d-block mb-3"></i>
+    <p class="lead">No questionnaires uploaded yet.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary">
+      <i class="bi bi-upload me-2"></i>Upload your first questionnaire
+    </a>
+  </div>
+</div>
+{% else %}
+
+<!-- Questionnaire cards -->
+<div class="d-grid gap-3" id="questionnaireList">
+{% for q in questionnaires %}
+<div class="card shadow-sm questionnaire-card" id="q-card-{{ q.id }}">
+
+  <!-- Card header -->
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+
+    <!-- Left: filename + accuracy -->
+    <div class="d-flex align-items-center gap-2 min-w-0">
+      <i class="bi bi-file-earmark-text text-primary flex-shrink-0"></i>
+      <span class="fw-semibold text-truncate">{{ q.original_filename }}</span>
+      {% if q.overall_accuracy is not none %}
+      <span class="badge bg-{{ q.accuracy_color() }} flex-shrink-0">{{ q.accuracy_pct() }}%</span>
+      {% endif %}
+    </div>
+
+    <!-- Right: status badge + action buttons -->
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+
+      {% if q.status == 'pending' %}
+        <span class="badge bg-secondary">Queued</span>
+        <a href="{{ url_for('processing_status', qid=q.id) }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-hourglass-split me-1"></i>Check Status
+        </a>
+
+      {% elif q.status == 'processing' %}
+        <span class="badge bg-info text-dark status-badge" data-qid="{{ q.id }}">
+          <span class="spinner-border spinner-border-sm me-1"></span>Processing…
+        </span>
+        <a href="{{ url_for('processing_status', qid=q.id) }}" class="btn btn-sm btn-outline-info">
+          <i class="bi bi-eye me-1"></i>Watch Live
+        </a>
+
+      {% elif q.status == 'review_pending' %}
+        <span class="badge bg-warning text-dark">Review Needed</span>
+        <a href="{{ url_for('questionnaire_review', qid=q.id) }}" class="btn btn-sm btn-warning">
+          <i class="bi bi-pencil-square me-1"></i>Review &amp; Accept
+        </a>
+
+      {% elif q.status == 'completed' %}
+        <span class="badge bg-success">Accepted</span>
+        <a href="{{ url_for('questionnaire_detail', qid=q.id) }}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-eye me-1"></i>View
+        </a>
+
+      {% elif q.status == 'failed' %}
+        <span class="badge bg-danger" title="{{ q.error_message }}">Failed</span>
+        <form method="POST" action="{{ url_for('run_extraction', qid=q.id) }}" class="d-inline">
+          <button type="submit" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-arrow-repeat me-1"></i>Retry
+          </button>
+        </form>
+      {% endif %}
+
+      <span class="text-muted small text-nowrap">{{ q.uploaded_at.strftime('%d %b %Y %H:%M') }}</span>
+
+      <!-- Delete -->
+      <form method="POST" action="{{ url_for('delete_questionnaire', qid=q.id) }}"
+            onsubmit="return confirm('Delete this questionnaire?')" class="d-inline">
+        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+          <i class="bi bi-trash"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Card body — preview answers (completed only) or status info -->
+  {% if q.status == 'completed' and response_map[q.id] %}
+  <div class="card-body py-2">
+    <div class="row g-2">
+      {% set resp_items = response_map[q.id].items() | list %}
+      {% for field, resp in resp_items[:8] %}
+      <div class="col-md-6 col-lg-4 col-xl-3">
+        <div class="qa-cell p-2 rounded border bg-light-subtle">
+          <div class="d-flex justify-content-between align-items-start mb-1">
+            <span class="badge bg-{{ resp.answer_type_badge() }}">{{ resp.field_name }}</span>
+            <span class="text-muted" style="font-size:.7rem">
+              <i class="bi bi-speedometer2"></i> {{ resp.confidence_pct() }}%
+            </span>
+          </div>
+          <div class="qa-answer small text-truncate" title="{{ resp.normalized_answer }}">
+            {{ resp.normalized_answer or '—' }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if resp_items|length > 8 %}
+    <div class="mt-2">
+      <a href="{{ url_for('questionnaire_detail', qid=q.id) }}" class="btn btn-link btn-sm ps-0">
+        View all {{ resp_items|length }} questions →
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  {% elif q.status == 'review_pending' %}
+  <div class="card-body py-2">
+    <div class="alert alert-warning mb-0 py-2 small">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      Extraction complete — <strong>{{ response_map[q.id]|length }} questions</strong> detected.
+      Click <strong>Review &amp; Accept</strong> to check answers before saving to the database.
+    </div>
+  </div>
+
+  {% elif q.status == 'failed' %}
+  <div class="card-body py-2">
+    <div class="alert alert-danger mb-0 py-2 small">
+      <i class="bi bi-exclamation-circle me-1"></i>{{ q.error_message or 'Unknown error during extraction.' }}
+    </div>
+  </div>
+
+  {% elif q.status == 'pending' %}
+  <div class="card-body py-2">
+    <div class="alert alert-secondary mb-0 py-2 small">
+      <i class="bi bi-info-circle me-1"></i>
+      File uploaded and ready. Click <strong>Run Extraction</strong> to begin OCR processing.
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endfor %}
+</div>
+
+<!-- Full data table (completed only, collapsed) -->
+{% if columns and completed_count > 0 %}
+<div class="mt-4">
+  <button class="btn btn-outline-secondary btn-sm" type="button"
+          data-bs-toggle="collapse" data-bs-target="#fullTable">
+    <i class="bi bi-grid-3x3-gap me-1"></i>Toggle full data table ({{ columns|length }} columns)
+  </button>
+  <div class="collapse mt-3" id="fullTable">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover table-bordered mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th>File</th>
+                <th>Date</th>
+                <th>Accuracy</th>
+                <th>OCR</th>
+                {% for col in columns %}
+                <th class="text-center">{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for q in questionnaires %}
+              {% if q.status == 'completed' %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('questionnaire_detail', qid=q.id) }}" class="text-decoration-none">
+                    {{ q.original_filename }}
+                  </a>
+                </td>
+                <td class="text-nowrap text-muted small">{{ q.uploaded_at.strftime('%d %b %Y') }}</td>
+                <td>
+                  <span class="badge bg-{{ q.accuracy_color() }}">
+                    {% if q.overall_accuracy is not none %}{{ q.accuracy_pct() }}%{% else %}—{% endif %}
+                  </span>
+                </td>
+                <td class="text-muted small">{{ q.ocr_method or '—' }}</td>
+                {% for col in columns %}
+                {% set resp = response_map[q.id].get(col) %}
+                <td class="small text-truncate" style="max-width:160px;" title="{{ resp.normalized_answer if resp else '' }}">
+                  {% if resp %}
+                    <span class="badge bg-{{ resp.answer_type_badge() }} me-1" style="font-size:.6rem">{{ resp.answer_type[0]|upper }}</span>
+                    {{ resp.normalized_answer | truncate(40) }}
+                  {% else %}—{% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endif %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Poll processing questionnaires every 3s and reload when done
+document.querySelectorAll('.status-badge[data-qid]').forEach(badge => {
+  const qid = badge.dataset.qid;
+  const interval = setInterval(() => {
+    fetch(`/status/${qid}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'review_pending' || data.status === 'completed' || data.status === 'failed') {
+          clearInterval(interval);
+          location.reload();
+        }
+      })
+      .catch(() => clearInterval(interval));
+  }, 3000);
+});
+</script>
+{% endblock %}

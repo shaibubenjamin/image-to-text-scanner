@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"c:/Users/Benjamin.shaibu/Desktop/Computer Vision Text Extract2/static/css\")",
+      "Bash(mkdir -p \"c:/Users/Benjamin.shaibu/Desktop/Computer Vision Text Extract2/static/js\")",
+      "Bash(pip install *)"
+    ]
+  }
+}
